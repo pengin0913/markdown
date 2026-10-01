@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="zh-Hant" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>講義與試卷格式轉換系統</title>
+
+  <!-- 1. KaTeX 樣式與腳本 (網頁預覽用) -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+  <!-- 2. Marked (Markdown 解析器) -->
+  <script src="https://cdn.jsdelivr.net/npm/marked@9.1.6/marked.min.js"></script>
+
+  <!-- 3. Temml (將 LaTeX 轉為標準 MathML 供 Word 原生方程式辨識) -->
+  <script src="https://cdn.jsdelivr.net/npm/temml@0.10.25/dist/temml.min.js"></script>
+
+  <style>
+    :root[data-theme="light"] {
+      --bg-color: #f1f5f9;
+      --panel-bg: #ffffff;
+      --header-bg: #ffffff;
+      --text-main: #1e293b;
+      --text-muted: #64748b;
+      --border-color: #e2e8f0;
+      --input-bg: #ffffff;
+      --preview-bg: #ffffff;
+      --code-bg: #f1f5f9;
+      --table-header-bg: #f8fafc;
+      --btn-default-bg: #ffffff;
+      --btn-default-hover: #f1f5f9;
+      --modal-overlay: rgba(15, 23, 42, 0.6);
+      --badge-color: #0284c7;
+    }
+
+    :root[data-theme="dark"] {
+      --bg-color: #0f172a;
+      --panel-bg: #1e293b;
+      --header-bg: #1e293b;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --border-color: #334155;
+      --input-bg: #0f172a;
+      --preview-bg: #0f172a;
+      --code-bg: #1e293b;
+      --table-header-bg: #334155;
+      --btn-default-bg: #334155;
+      --btn-default-hover: #475569;
+      --modal-overlay: rgba(0, 0, 0, 0.75);
+      --badge-color: #38bdf8;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft JhengHei", sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      transition: background-color 0.2s, color 0.2s;
+    }
+
+    header {
+      background: var(--header-bg);
+      border-bottom: 1px solid var(--border-color);
+      padding: 10px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .header-brand {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .header-brand h1 {
+      margin: 0;
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: var(--text-main);
+      letter-spacing: 0.5px;
+    }
+    .version-meta {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      line-height: 1.4;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .version-meta span {
+      display: inline-flex;
+      align-items: center;
+    }
+
+    .action-group {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    button {
+      padding: 7px 13px;
+      font-size: 0.88rem;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      background: var(--btn-default-bg);
+      color: var(--text-main);
+      cursor: pointer;
+      font-weight: 500;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      transition: all 0.15s ease;
+    }
+    button:hover {
+      background: var(--btn-default-hover);
+    }
+    .btn-primary {
+      background: #0284c7;
+      color: #ffffff;
+      border: none;
+    }
+    .btn-primary:hover { background: #0369a1; }
+    
+    .btn-docx {
+      background: #2563eb;
+      color: #ffffff;
+      border: none;
+      font-weight: 600;
+    }
+    .btn-docx:hover { background: #1d4ed8; }
+
+    .btn-tutorial {
+      background: #059669;
+      color: #ffffff;
+      border: none;
+    }
+    .btn-tutorial:hover { background: #047857; }
+
+    .btn-tool {
+      background: #475569;
+      color: #ffffff;
+      border: none;
+    }
+    .btn-tool:hover { background: #334155; }
+
+    main {
+      flex: 1;
+      display: flex;
+      padding: 14px;
+      gap: 14px;
+      overflow: hidden;
+    }
+    .pane {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: var(--panel-bg);
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+      overflow: hidden;
+    }
+    .pane-header {
+      padding: 9px 16px;
+      background: var(--header-bg);
+      border-bottom: 1px solid var(--border-color);
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    textarea {
+      flex: 1;
+      padding: 16px;
+      border: none;
+      resize: none;
+      outline: none;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 0.95rem;
+      line-height: 1.6;
+      background: var(--input-bg);
+      color: var(--text-main);
+    }
+    #preview-container {
+      flex: 1;
+      padding: 24px;
+      overflow-y: auto;
+      line-height: 1.8;
+      font-size: 1rem;
+      background: var(--preview-bg);
+      color: var(--text-main);
+    }
+
+    #preview-container h1 { font-size: 1.6rem; border-bottom: 2px solid var(--border-color); padding-bottom: 6px; }
+    #preview-container h2 { font-size: 1.35rem; margin-top: 1.2em; }
+    #preview-container h3 { font-size: 1.15rem; }
+    #preview-container table { border-collapse: collapse; width: 100%; margin: 16px 0; }
+    #preview-container th, #preview-container td { border: 1px solid var(--border-color); padding: 8px 12px; }
+    #preview-container th { background: var(--table-header-bg); font-weight: 600; }
+    #preview-container blockquote { border-left: 4px solid var(--badge-color); margin: 1em 0; padding-left: 12px; color: var(--text-muted); }
+    #preview-container code { background: var(--code-bg); padding: 2px 6px; border-radius: 4px; font-family: monospace; }
+
+    .modal-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: var(--modal-overlay);
+      backdrop-filter: blur(2px);
+      z-index: 999;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .modal-backdrop.active {
+      display: flex;
+    }
+    .modal-box {
+      background: var(--panel-bg);
+      color: var(--text-main);
+      width: 100%;
+      max-width: 650px;
+      max-height: 85vh;
+      border-radius: 12px;
+      border: 1px solid var(--border-color);
+      box-shadow: 0 10px 25px rgba(0,0,0,0.35);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      animation: modalFadeIn 0.2s ease-out;
+    }
+    @keyframes modalFadeIn {
+      from { transform: scale(0.96); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+    .modal-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .modal-header h2 { margin: 0; font-size: 1.15rem; }
+    .btn-close {
+      background: transparent;
+      border: none;
+      font-size: 1.3rem;
+      cursor: pointer;
+      color: var(--text-muted);
+      line-height: 1;
+      padding: 4px 8px;
+    }
+    .modal-body {
+      padding: 20px;
+      overflow-y: auto;
+      line-height: 1.7;
+      font-size: 0.95rem;
+    }
+    .modal-body ol {
+      padding-left: 20px;
+      margin-top: 8px;
+    }
+    .modal-body li {
+      margin-bottom: 12px;
+    }
+    .highlight-tip {
+      background: rgba(2, 132, 199, 0.15);
+      border-left: 4px solid var(--badge-color);
+      padding: 10px 14px;
+      border-radius: 4px;
+      margin: 14px 0;
+      font-size: 0.9rem;
+    }
+
+    @media print {
+      body { background: white; color: black; }
+      header, .pane:first-child, .modal-backdrop { display: none !important; }
+      main { padding: 0; }
+      .pane { border: none; }
+      #preview-container { padding: 0; font-size: 12pt; background: white; color: black; }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="header-brand">
+      <h1>講義與試卷格式轉換系統</h1>
+      <div class="version-meta">
+        <span>::AI產出協作工作套件組合包之1 (v.2026.09.25)</span>
+        <span>::維護與設計：國教輔導團國小數學分團 math@kecg</span>
+      </div>
+    </div>
+    <div class="action-group">
+      <!-- 預設為暗黑風格，按鈕顯示切換為明亮風格 -->
+      <button id="themeToggleBtn" onclick="toggleTheme()">☀️ 切換明亮風格</button>
+      <!-- 新增「正規化表格」按鈕 -->
+      <button class="btn-tool" onclick="normalizeTables()">🛠️ 正規化表格</button>
+      <button onclick="clearContent()">清空</button>
+      <button class="btn-tutorial" onclick="openTutorial()">Word二編教學</button>
+      <button class="btn-primary" onclick="exportHTML()">匯出 .html</button>
+      <button class="btn-primary" onclick="exportPDF()">匯出 .pdf</button>
+      <button class="btn-docx" onclick="exportCleanWord()">匯出原生 .doc (Word)</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="pane">
+      <div class="pane-header">貼上 AI 回覆內容 (支援 Markdown & LaTeX)</div>
+      <textarea id="raw-input" placeholder="在此貼上內容..."></textarea>
+    </div>
+
+    <div class="pane">
+      <div class="pane-header">網頁即時渲染結果</div>
+      <div id="preview-container"></div>
+    </div>
+  </main>
+
+  <div id="tutorialModal" class="modal-backdrop" onclick="closeTutorialOnBackdrop(event)">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h2>Word 方程式二次編輯與另存教學</h2>
+        <button class="btn-close" onclick="closeTutorial()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p>本系統在匯出 Word 檔案時，已將 LaTeX 代碼轉為微軟原生 <strong>MathML 方程式物件</strong>。開啟檔案後請參考以下步驟進階編輯：</p>
+        <ol>
+          <li>
+            <strong>直接編輯單一公式</strong>：
+            在 Word 中以滑鼠點擊任何算式（如 $A = \pi r^2$），上方功能區會自動出現<strong>「方程式工具 / 設計」</strong>，您可以直接用鍵盤修改數字、括號或透過工具列新增矩陣、分數。
+          </li>
+          <li>
+            <strong>批次重新渲染 / 格式調整</strong>：
+            若公式顯示為文字狀態，請選取該算式（或按 <code>Ctrl + A</code> 全選），點擊上方選單的<strong>「設計 (方程式工具)」&gt;「一般文字」或「專業格式」</strong>，即可手動觸發轉換；也可以使用快捷鍵 <code>Alt</code> + <code>=</code> 快速切換。
+          </li>
+          <li>
+            <strong>調整字體與版面</strong>：
+            全選內文可統一將中文改為「微軟正黑體」或「標楷體」。公式字型建議維持微軟標準的 <code>Cambria Math</code>，以確保符號對齊與美觀。
+          </li>
+          <li>
+            <strong>關鍵步驟：另存為標準 .docx 檔</strong>：
+            點擊 Word 左上角<strong>「檔案」&gt;「另存新檔」</strong>，存檔類型請務必選擇<strong>「Word 文件 (*.docx)」</strong>。這樣能確保微軟原生方程式與段落排版永久固定，日後寄給他人或列印都不會跑版。
+          </li>
+        </ol>
+        <div class="highlight-tip">
+          💡 <strong>小提示</strong>：匯出後的檔案副檔名為 <code>.doc</code>，完全相容於 Word 2013、2016、2019、2021 及 Microsoft 365，雙擊即可直接以 Word 打開。
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const inputArea = document.getElementById('raw-input');
+    const previewContainer = document.getElementById('preview-container');
+    const tutorialModal = document.getElementById('tutorialModal');
+    const themeToggleBtn = document.getElementById('themeToggleBtn');
+
+    // 預設範例內容
+    inputArea.value = `### 一、 未知數解題練習
+請計算下列未知數的值：
+1. 計算：$7 \\times (\\quad) = 42$，則 $(\\quad) = 6$。
+2. 已知圓面積公式，若半徑 $r = 5$，則面積為：
+$$A = \\pi r^2 = 3.14 \\times 5^2 = 78.5$$
+
+### 二、 觀念評量表格
+| 題號 | 觀念指標 | 難易度 |
+| :--- | :--- | :--- |
+| 第 1 題 | 乘除互逆運算 | 易 |
+| 第 2 題 | 圓面積公式代入 | 中 |
+
+> **提示**：解題時請特別注意單位換算。`;
+
+    // 網頁預覽渲染 (KaTeX)
+    function renderContent() {
+      const rawText = inputArea.value;
+      let htmlContent = marked.parse(rawText);
+      previewContainer.innerHTML = htmlContent;
+
+      if (window.renderMathInElement) {
+        renderMathInElement(previewContainer, {
+          delimiters: [
+            { left: "$$", right: "$$", display: true },
+            { left: "$", right: "$", display: false },
+            { left: "\\(", right: "\\)", display: false },
+            { left: "\\[", right: "\\]", display: true }
+          ],
+          throwOnError: false
+        });
+      }
+    }
+
+    inputArea.addEventListener('input', renderContent);
+    window.addEventListener('DOMContentLoaded', renderContent);
+
+    function clearContent() {
+      inputArea.value = '';
+      renderContent();
+    }
+
+    // 表格正規化功能
+    function normalizeTables() {
+      const text = inputArea.value;
+      const lines = text.split('\n');
+      const outputLines = [];
+      let inTable = false;
+      let currentExpectedCols = 0;
+      let bufferRow = '';
+
+      // 計算一列中未轉義的 pipe 符號數量
+      function countPipes(str) {
+        let count = 0;
+        for (let i = 0; i < str.length; i++) {
+          if (str[i] === '|' && (i === 0 || str[i - 1] !== '\\')) {
+            count++;
+          }
+        }
+        return count;
+      }
+
+      // 檢查是否為表格分隔線 (例如 | :--- | :--- |)
+      function isDelimiterRow(str) {
+        const trimmed = str.trim();
+        return /^\|?\s*:?-+:?\s*(\|?\s*:?-+:?\s*)+\|?$/.test(trimmed);
+      }
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const trimmedLine = line.trim();
+
+        // 判斷是否即將進入或正在表格中
+        if (!inTable) {
+          // 若當前行包含 | 且下一行是分隔列，代表表格開頭 (Header)
+          if (trimmedLine.startsWith('|') && i + 1 < lines.length && isDelimiterRow(lines[i + 1])) {
+            inTable = true;
+            currentExpectedCols = countPipes(trimmedLine);
+            outputLines.push(trimmedLine);
+            continue;
+          }
+          // 非表格內容直接保留
+          outputLines.push(line);
+        } else {
+          // 已在表格區域中
+          if (isDelimiterRow(trimmedLine)) {
+            currentExpectedCols = countPipes(trimmedLine);
+            outputLines.push(trimmedLine);
+            continue;
+          }
+
+          // 如果遇到空白行，但目前暫存的 row 尚未閉合完整管線，繼續拼接；若 buffer 為空且下一行不是表格內容則離開表格
+          if (trimmedLine === '') {
+            if (bufferRow) {
+              continue;
+            } else {
+              // 檢查後續是否還有表格列
+              const nextNonEmpty = lines.slice(i + 1).find(l => l.trim() !== '');
+              if (!nextNonEmpty || !nextNonEmpty.trim().startsWith('|')) {
+                inTable = false;
+                outputLines.push(line);
+                continue;
+              }
+              continue;
+            }
+          }
+
+          // 拼接行至 bufferRow
+          if (!bufferRow) {
+            bufferRow = trimmedLine;
+          } else {
+            // 儲存格內部換行時，以緊湊方式拼接
+            bufferRow += trimmedLine.startsWith('|') ? ' ' + trimmedLine : trimmedLine;
+          }
+
+          // 檢查目前 bufferRow 中的管線數是否已達到或超過預期整列數（且以 | 結尾）
+          const pipesCount = countPipes(bufferRow);
+          if (pipesCount >= currentExpectedCols && bufferRow.trim().endsWith('|')) {
+            outputLines.push(bufferRow);
+            bufferRow = '';
+          }
+        }
+      }
+
+      // 若結尾仍有殘留 buffer 則輸出
+      if (bufferRow) {
+        outputLines.push(bufferRow);
+      }
+
+      inputArea.value = outputLines.join('\n');
+      renderContent();
+    }
+
+    // 1. 暗黑/明亮風格切換 (預設 dark)
+    function toggleTheme() {
+      const root = document.documentElement;
+      const currentTheme = root.getAttribute('data-theme');
+      const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+      root.setAttribute('data-theme', newTheme);
+      themeToggleBtn.textContent = newTheme === 'dark' ? '☀️ 切換明亮風格' : '🌙 切換暗黑風格';
+    }
+
+    // 2. 教學彈窗控制
+    function openTutorial() {
+      tutorialModal.classList.add('active');
+    }
+    function closeTutorial() {
+      tutorialModal.classList.remove('active');
+    }
+    function closeTutorialOnBackdrop(e) {
+      if (e.target === tutorialModal) {
+        closeTutorial();
+      }
+    }
+
+    // 3. 匯出原生 Word (.doc / MathML)
+    function exportCleanWord() {
+      let rawText = inputArea.value;
+
+      // 獨立行公式 $$...$$ 轉標準 MathML
+      rawText = rawText.replace(/\$\$([\s\S]+?)\$\$/g, (match, formula) => {
+        try {
+          const mathml = temml.renderToString(formula.trim(), { displayMode: true, xml: true });
+          return `<div class="math-display">${mathml}</div>`;
+        } catch (e) {
+          return match;
+        }
+      });
+
+      // 行內公式 $...$ 轉標準 MathML
+      rawText = rawText.replace(/\$([^\$\n]+?)\$/g, (match, formula) => {
+        try {
+          const mathml = temml.renderToString(formula.trim(), { displayMode: false, xml: true });
+          return mathml;
+        } catch (e) {
+          return match;
+        }
+      });
+
+      let bodyHtml = marked.parse(rawText);
+
+      const wordDoc = `<html xmlns:o='urn:schemas-microsoft-com:office:office' 
+             xmlns:w='urn:schemas-microsoft-com:office:word' 
+             xmlns:m='http://schemas.microsoft.com/office/2004/12/omml' 
+             xmlns='http://www.w3.org/TR/REC-html40'>
+      <head>
+        <meta charset='utf-8'>
+        <title>講義試卷</title>
+        <!--[if gte mso 9]>
+        <xml>
+          <w:WordDocument>
+            <w:View>Print</w:View>
+            <w:Zoom>100</w:Zoom>
+            <w:DoNotOptimizeForBrowser/>
+          </w:WordDocument>
+        </xml>
+        <![endif]-->
+        <style>
+          body {
+            font-family: "微軟正黑體", "Microsoft JhengHei", "Calibri", sans-serif;
+            font-size: 12pt;
+            line-height: 1.6;
+            color: #000000;
+          }
+          h1 { font-size: 18pt; font-weight: bold; color: #1f497d; margin-top: 14pt; margin-bottom: 6pt; }
+          h2 { font-size: 15pt; font-weight: bold; color: #2e75b5; margin-top: 12pt; margin-bottom: 4pt; }
+          h3 { font-size: 13pt; font-weight: bold; color: #333333; margin-top: 10pt; margin-bottom: 4pt; }
+          p { margin-top: 0pt; margin-bottom: 6pt; }
+          ol, ul { margin-top: 0pt; margin-bottom: 6pt; padding-left: 24pt; }
+          li { margin-bottom: 3pt; line-height: 1.5; }
+          table { border-collapse: collapse; width: 100%; margin-top: 8pt; margin-bottom: 12pt; }
+          th, td { border: 1px solid #7f7f7f; padding: 6pt 10pt; font-size: 11pt; }
+          th { background-color: #f2f2f2; font-weight: bold; text-align: center; }
+          blockquote { margin: 8pt 0; padding: 6pt 12pt; border-left: 3pt solid #2e75b5; background-color: #f9f9f9; color: #555555; }
+          .math-display { text-align: center; margin: 10pt 0; }
+        </style>
+      </head>
+      <body>
+        ${bodyHtml}
+      </body>
+      </html>`;
+
+      const blob = new Blob(['\ufeff' + wordDoc], { type: 'application/msword;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = '講義試卷_可編輯公式.doc';
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    // 4. 匯出 HTML
+    function exportHTML() {
+      const content = previewContainer.innerHTML;
+      const fullDoc = `<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <title>講義預覽</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+  <style>
+    body { font-family: "Microsoft JhengHei", Arial, sans-serif; line-height: 1.8; padding: 40px; max-width: 800px; margin: auto; }
+    table { border-collapse: collapse; width: 100%; margin: 16px 0; }
+    th, td { border: 1px solid #ccc; padding: 8px; }
+    th { background: #f5f5f5; }
+  </style>
+</head>
+<body>${content}</body>
+</html>`;
+      downloadBlob(fullDoc, 'math_lesson.html', 'text/html');
+    }
+
+    // 5. 匯出 PDF
+    function exportPDF() {
+      window.print();
+    }
+
+    function downloadBlob(text, filename, type) {
+      const blob = new Blob([text], { type: type + ';charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+  </script>
+</body>
+</html>
